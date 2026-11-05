@@ -29,6 +29,19 @@ function Team() {
     userId: ""
   });
 
+  // Get logged-in user
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      return null;
+    }
+  })();
+
+  // Only Project Manager can manage team members
+  const isProjectManager =
+    currentUser?.role === "PROJECT_MANAGER";
+
   async function fetchTeamData() {
     try {
       setLoading(true);
@@ -58,6 +71,8 @@ function Team() {
 
   async function handleAddMember(e) {
     e.preventDefault();
+
+    if (!isProjectManager) return;
 
     try {
       setSaving(true);
@@ -90,6 +105,8 @@ function Team() {
   }
 
   async function handleRemoveMember(project, member) {
+    if (!isProjectManager) return;
+
     const confirmed = window.confirm(
       `Remove ${member.name} from ${project.name}? Their account will not be deleted.`
     );
@@ -156,8 +173,10 @@ function Team() {
 
   return (
     <div>
+
       {/* Heading */}
       <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
             Team Members
@@ -168,17 +187,21 @@ function Team() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setShowForm(!showForm);
-            setError("");
-            setSuccess("");
-          }}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700"
-        >
-          {showForm ? <X size={18} /> : <UserPlus size={18} />}
-          {showForm ? "Close" : "Add Member"}
-        </button>
+        {/* Add Member - Project Manager Only */}
+        {isProjectManager && (
+          <button
+            onClick={() => {
+              setShowForm(!showForm);
+              setError("");
+              setSuccess("");
+            }}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700"
+          >
+            {showForm ? <X size={18} /> : <UserPlus size={18} />}
+            {showForm ? "Close" : "Add Member"}
+          </button>
+        )}
+
       </div>
 
       {/* Messages */}
@@ -194,17 +217,19 @@ function Team() {
         </p>
       )}
 
-      {/* Add Member Form */}
-      {showForm && (
+      {/* Add Member Form - Project Manager Only */}
+      {isProjectManager && showForm && (
         <form
           onSubmit={handleAddMember}
           className="bg-white border rounded-xl p-6 mb-6 shadow-sm"
         >
+
           <h2 className="text-lg font-semibold text-slate-800 mb-5">
             Add Member to Project
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Select Project
@@ -263,6 +288,7 @@ function Team() {
                 </p>
               )}
             </div>
+
           </div>
 
           <button
@@ -276,11 +302,13 @@ function Team() {
           >
             {saving ? "Adding Member..." : "Add to Project"}
           </button>
+
         </form>
       )}
 
       {/* Total Members */}
       <div className="bg-white border rounded-xl p-5 mb-6 flex items-center gap-4">
+
         <div className="bg-indigo-100 text-indigo-600 p-3 rounded-lg">
           <Users size={26} />
         </div>
@@ -294,10 +322,12 @@ function Team() {
             {members.length}
           </h2>
         </div>
+
       </div>
 
       {/* Search */}
       <div className="flex items-center gap-2 bg-white border rounded-lg px-3 mb-6">
+
         <Search size={18} className="text-slate-400" />
 
         <input
@@ -306,6 +336,7 @@ function Team() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full py-3 outline-none"
         />
+
       </div>
 
       {/* Members */}
@@ -315,8 +346,10 @@ function Team() {
         </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+
           {filteredMembers.length > 0 ? (
             filteredMembers.map((member) => {
+
               const assignedProjects = projects.filter((project) =>
                 project.members?.some(
                   (item) => item.id === member.id
@@ -328,8 +361,10 @@ function Team() {
                   key={member.id}
                   className="bg-white border rounded-xl p-6 shadow-sm"
                 >
+
                   {/* Member Details */}
                   <div className="flex items-center gap-4 mb-5">
+
                     <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-lg">
                       {member.name.charAt(0).toUpperCase()}
                     </div>
@@ -343,6 +378,7 @@ function Team() {
                         {formatRole(member.role)}
                       </p>
                     </div>
+
                   </div>
 
                   <p className="text-sm text-slate-500 break-all">
@@ -361,6 +397,7 @@ function Team() {
 
                   {/* Project Assignments */}
                   <div className="border-t mt-5 pt-4">
+
                     <div className="flex items-center gap-2 mb-3">
                       <FolderKanban size={17} className="text-indigo-600" />
 
@@ -371,41 +408,50 @@ function Team() {
 
                     {assignedProjects.length > 0 ? (
                       <div className="space-y-3">
+
                         {assignedProjects.map((project) => (
                           <div
                             key={project.id}
                             className="flex items-center justify-between gap-2 bg-slate-50 p-3 rounded-lg"
                           >
+
                             <span className="text-sm text-slate-700 font-medium">
                               {project.name}
                             </span>
 
-                            <button
-                              onClick={() =>
-                                handleRemoveMember(project, member)
-                              }
-                              disabled={
-                                removingId === `${project.id}-${member.id}`
-                              }
-                              title="Remove from project"
-                              aria-label={`Remove ${member.name} from ${project.name}`}
-                              className="text-red-500 hover:bg-red-100 p-2 rounded-lg disabled:opacity-50"
-                            >
-                              {removingId === `${project.id}-${member.id}` ? (
-                                <span className="text-xs">...</span>
-                              ) : (
-                                <Trash2 size={16} />
-                              )}
-                            </button>
+                            {/* Remove Member - Project Manager Only */}
+                            {isProjectManager && (
+                              <button
+                                onClick={() =>
+                                  handleRemoveMember(project, member)
+                                }
+                                disabled={
+                                  removingId === `${project.id}-${member.id}`
+                                }
+                                title="Remove from project"
+                                aria-label={`Remove ${member.name} from ${project.name}`}
+                                className="text-red-500 hover:bg-red-100 p-2 rounded-lg disabled:opacity-50"
+                              >
+                                {removingId === `${project.id}-${member.id}` ? (
+                                  <span className="text-xs">...</span>
+                                ) : (
+                                  <Trash2 size={16} />
+                                )}
+                              </button>
+                            )}
+
                           </div>
                         ))}
+
                       </div>
                     ) : (
                       <p className="text-sm text-slate-400">
                         Not assigned to any projects.
                       </p>
                     )}
+
                   </div>
+
                 </div>
               );
             })
@@ -414,8 +460,10 @@ function Team() {
               No team members found.
             </p>
           )}
+
         </div>
       )}
+
     </div>
   );
 }

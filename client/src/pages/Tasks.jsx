@@ -27,6 +27,7 @@ function Tasks() {
     dueDate: ""
   });
 
+  // Get current logged-in user
   const currentUser = (() => {
     try {
       return JSON.parse(localStorage.getItem("user") || "null");
@@ -35,20 +36,26 @@ function Tasks() {
     }
   })();
 
+  // Only Project Manager can create tasks
+  const isProjectManager =
+    currentUser?.role === "PROJECT_MANAGER";
+
   async function fetchData() {
     try {
       setLoading(true);
       setError("");
 
-      const [taskRes, projectRes, memberRes] = await Promise.all([
-        API.get("/tasks"),
-        API.get("/projects"),
-        API.get("/projects/members")
-      ]);
+      const [taskRes, projectRes, memberRes] =
+        await Promise.all([
+          API.get("/tasks"),
+          API.get("/projects"),
+          API.get("/projects/members")
+        ]);
 
       setTasks(taskRes.data.data);
       setProjects(projectRes.data.data);
       setMembers(memberRes.data.data);
+
     } catch (err) {
       setError(
         err.response?.data?.message || "Failed to load task data"
@@ -87,15 +94,21 @@ function Tasks() {
     }));
   }
 
-  // Members belonging to the selected project only
+  // Members belonging to selected project
   const selectedProject = projects.find(
     (project) => project.id === Number(formData.projectId)
   );
 
   const projectMemberIds = new Set([
-    ...(selectedProject?.members || []).map((member) => member.id),
-    ...(selectedProject?.ownerId ? [selectedProject.ownerId] : []),
-    ...(selectedProject?.owner?.id ? [selectedProject.owner.id] : [])
+    ...(selectedProject?.members || []).map(
+      (member) => member.id
+    ),
+    ...(selectedProject?.ownerId
+      ? [selectedProject.ownerId]
+      : []),
+    ...(selectedProject?.owner?.id
+      ? [selectedProject.owner.id]
+      : [])
   ]);
 
   const hasMembershipData =
@@ -105,7 +118,9 @@ function Tasks() {
       selectedProject.owner != null);
 
   const availableMembers = hasMembershipData
-    ? members.filter((member) => projectMemberIds.has(member.id))
+    ? members.filter((member) =>
+        projectMemberIds.has(member.id)
+      )
     : selectedProject
       ? members
       : [];
@@ -113,6 +128,9 @@ function Tasks() {
   // Create or update task
   async function handleSubmit(e) {
     e.preventDefault();
+
+    // Frontend permission check
+    if (!isProjectManager) return;
 
     try {
       setSaving(true);
@@ -136,18 +154,31 @@ function Tasks() {
 
       resetForm();
       await fetchData();
+
     } catch (err) {
       setError(
         err.response?.data?.message ||
-          (editingId ? "Failed to update task" : "Failed to create task")
+          (editingId
+            ? "Failed to update task"
+            : "Failed to create task")
       );
     } finally {
       setSaving(false);
     }
   }
 
-  // Open form with existing task information
+  // Open existing task for editing
   function handleEdit(task) {
+    const project = projects.find(
+      (item) => item.id === task.projectId
+    );
+
+    const canEdit =
+      currentUser?.role === "ADMIN" ||
+      project?.ownerId === currentUser?.id;
+
+    if (!canEdit) return;
+
     setFormData({
       title: task.title || "",
       description: task.description || "",
@@ -179,9 +210,11 @@ function Tasks() {
       });
 
       await fetchData();
+
     } catch (err) {
       setError(
-        err.response?.data?.message || "Failed to update task status"
+        err.response?.data?.message ||
+          "Failed to update task status"
       );
     }
   }
@@ -200,9 +233,11 @@ function Tasks() {
       await API.delete(`/tasks/${taskId}`);
 
       await fetchData();
+
     } catch (err) {
       setError(
-        err.response?.data?.message || "Failed to delete task"
+        err.response?.data?.message ||
+          "Failed to delete task"
       );
     }
   }
@@ -222,6 +257,14 @@ function Tasks() {
     return canEditTask(task);
   }
 
+  function canUpdateStatus(task) {
+    return (
+      currentUser?.role === "ADMIN" ||
+      task.assignedToId === currentUser?.id ||
+      canEditTask(task)
+    );
+  }
+
   function formatStatus(value) {
     const statuses = {
       PENDING: "Pending",
@@ -233,12 +276,17 @@ function Tasks() {
   }
 
   function formatPriority(value) {
-    return value.charAt(0) + value.slice(1).toLowerCase();
+    return value.charAt(0) +
+      value.slice(1).toLowerCase();
   }
 
   function getPriorityColor(priority) {
-    if (priority === "HIGH") return "bg-red-100 text-red-700";
-    if (priority === "MEDIUM") return "bg-yellow-100 text-yellow-700";
+    if (priority === "HIGH")
+      return "bg-red-100 text-red-700";
+
+    if (priority === "MEDIUM")
+      return "bg-yellow-100 text-yellow-700";
+
     return "bg-green-100 text-green-700";
   }
 
@@ -259,15 +307,18 @@ function Tasks() {
       .includes(search.toLowerCase());
 
     const matchesStatus =
-      status === "All" || formatStatus(task.status) === status;
+      status === "All" ||
+      formatStatus(task.status) === status;
 
     return matchesSearch && matchesStatus;
   });
 
   return (
     <div>
+
       {/* Heading */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
             Tasks
@@ -278,21 +329,25 @@ function Tasks() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            if (showForm) {
-              resetForm();
-            } else {
-              setEditingId(null);
-              setShowForm(true);
-              setError("");
-            }
-          }}
-          className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-        >
-          {showForm ? <X size={18} /> : <Plus size={18} />}
-          {showForm ? "Close Form" : "Add Task"}
-        </button>
+        {/* Add Task - Project Manager Only */}
+        {isProjectManager && (
+          <button
+            onClick={() => {
+              if (showForm) {
+                resetForm();
+              } else {
+                setEditingId(null);
+                setShowForm(true);
+                setError("");
+              }
+            }}
+            className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            {showForm ? <X size={18} /> : <Plus size={18} />}
+            {showForm ? "Close Form" : "Add Task"}
+          </button>
+        )}
+
       </div>
 
       {/* Error */}
@@ -303,11 +358,12 @@ function Tasks() {
       )}
 
       {/* Create / Edit Task Form */}
-      {showForm && (
+      {isProjectManager && showForm && (
         <form
           onSubmit={handleSubmit}
           className="bg-white p-6 rounded-xl border shadow-sm mb-8 space-y-4"
         >
+
           <h2 className="font-semibold text-lg">
             {editingId ? "Edit Task" : "Create New Task"}
           </h2>
@@ -393,6 +449,7 @@ function Tasks() {
           />
 
           <div className="flex gap-3">
+
             <button
               type="submit"
               disabled={saving || projects.length === 0}
@@ -412,6 +469,7 @@ function Tasks() {
             >
               Cancel
             </button>
+
           </div>
 
           {projects.length === 0 && (
@@ -419,11 +477,13 @@ function Tasks() {
               Create or get access to a project before adding tasks.
             </p>
           )}
+
         </form>
       )}
 
       {/* Search and Filter */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
+
         <div className="flex items-center gap-2 bg-white border rounded-lg px-3 flex-1">
           <Search size={18} className="text-slate-400" />
 
@@ -445,6 +505,7 @@ function Tasks() {
           <option value="In Progress">In Progress</option>
           <option value="Completed">Completed</option>
         </select>
+
       </div>
 
       {/* Task Table */}
@@ -452,7 +513,9 @@ function Tasks() {
         <p className="text-slate-500">Loading tasks...</p>
       ) : (
         <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
+
           <table className="w-full text-left">
+
             <thead className="bg-slate-50 text-slate-500 text-sm">
               <tr>
                 <th className="p-4">Task</th>
@@ -466,9 +529,11 @@ function Tasks() {
             </thead>
 
             <tbody>
+
               {filteredTasks.length > 0 ? (
                 filteredTasks.map((task) => (
                   <tr key={task.id} className="border-t">
+
                     <td className="p-4 font-medium text-slate-800">
                       {task.title}
                     </td>
@@ -498,10 +563,11 @@ function Tasks() {
                     <td className="p-4">
                       <select
                         value={task.status}
+                        disabled={!canUpdateStatus(task)}
                         onChange={(e) =>
                           handleStatusChange(task.id, e.target.value)
                         }
-                        className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${getStatusColor(task.status)}`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${getStatusColor(task.status)} disabled:opacity-60`}
                       >
                         <option value="PENDING">Pending</option>
                         <option value="IN_PROGRESS">In Progress</option>
@@ -511,6 +577,7 @@ function Tasks() {
 
                     <td className="p-4">
                       <div className="flex items-center gap-3">
+
                         {canEditTask(task) && (
                           <button
                             onClick={() => handleEdit(task)}
@@ -530,8 +597,10 @@ function Tasks() {
                             <Trash2 size={18} />
                           </button>
                         )}
+
                       </div>
                     </td>
+
                   </tr>
                 ))
               ) : (
@@ -544,10 +613,13 @@ function Tasks() {
                   </td>
                 </tr>
               )}
+
             </tbody>
           </table>
+
         </div>
       )}
+
     </div>
   );
 }
