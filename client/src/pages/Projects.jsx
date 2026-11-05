@@ -15,6 +15,18 @@ function Projects() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Check logged-in user's role
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
+  const isProjectManager =
+    currentUser.role === "PROJECT_MANAGER";
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -30,7 +42,9 @@ function Projects() {
       const response = await API.get("/projects");
       setProjects(response.data.data || []);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load projects");
+      setError(
+        err.response?.data?.message || "Failed to load projects"
+      );
     } finally {
       setLoading(false);
     }
@@ -56,11 +70,14 @@ function Projects() {
       deadline: "",
       status: "PLANNING"
     });
+
     setEditingId(null);
     setShowForm(false);
   }
 
   function handleEdit(project) {
+    if (!isProjectManager) return;
+
     setEditingId(project.id);
 
     setFormData({
@@ -77,6 +94,8 @@ function Projects() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+
+    if (!isProjectManager) return;
 
     try {
       setSaving(true);
@@ -101,7 +120,9 @@ function Projects() {
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        (editingId ? "Failed to update project" : "Failed to create project")
+        (editingId
+          ? "Failed to update project"
+          : "Failed to create project")
       );
     } finally {
       setSaving(false);
@@ -109,6 +130,8 @@ function Projects() {
   }
 
   async function handleDelete(projectId) {
+    if (!isProjectManager) return;
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this project? Its tasks may also be deleted."
     );
@@ -123,7 +146,9 @@ function Projects() {
       await fetchProjects();
 
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete project");
+      setError(
+        err.response?.data?.message || "Failed to delete project"
+      );
     }
   }
 
@@ -175,28 +200,31 @@ function Projects() {
 
   return (
     <div>
-
       {/* Heading */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
             Projects
           </h1>
+
           <p className="text-slate-500 mt-1">
             Manage and track all your projects.
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-        >
-          <Plus size={18} />
-          Add Project
-        </button>
+        {/* Only Project Manager sees Add Project */}
+        {isProjectManager && (
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            Add Project
+          </button>
+        )}
       </div>
 
       {/* Error */}
@@ -206,8 +234,8 @@ function Projects() {
         </p>
       )}
 
-      {/* Create / Edit Form */}
-      {showForm && (
+      {/* Create / Edit Form - Manager only */}
+      {isProjectManager && showForm && (
         <div className="bg-white p-6 rounded-xl shadow-sm border mb-8">
 
           <div className="flex justify-between items-center mb-5">
@@ -318,8 +346,8 @@ function Projects() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
+                onEdit={isProjectManager ? handleEdit : undefined}
+                onDelete={isProjectManager ? handleDelete : undefined}
               />
             ))
           ) : (
@@ -330,7 +358,6 @@ function Projects() {
 
         </div>
       )}
-
     </div>
   );
 }
