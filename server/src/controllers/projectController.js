@@ -215,15 +215,17 @@ export const deleteProject = async (req, res, next) => {
       });
     }
 
-    const isAdmin = req.user.role === "ADMIN";
-    const isOwner = project.ownerId === req.user.id;
+    const canEdit =
+  req.user.role === "ADMIN" ||
+  req.user.role === "PROJECT_MANAGER" ||
+  existingProject.ownerId === req.user.id;
 
-    if (!isAdmin && !isOwner) {
-      return res.status(403).json({
-        success: false,
-        message: "Only the project owner or admin can delete this project"
-      });
-    }
+if (!canEdit) {
+  return res.status(403).json({
+    success: false,
+    message: "You are not authorized to update this project"
+  });
+}
 
     await prisma.project.delete({
       where: { id: projectId }
