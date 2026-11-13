@@ -1,15 +1,20 @@
 
 import prisma from "../config/prisma.js";
 import logActivity from "../utils/activityLogger.js";
-// Add a member to a project
+
+// ============================================
+// ADD A MEMBER TO A PROJECT
+// ============================================
 export const addProjectMember = async (req, res, next) => {
   try {
     const projectId = Number(req.params.projectId);
     const userId = Number(req.body.userId);
 
     if (
-      !Number.isInteger(projectId) || projectId <= 0 ||
-      !Number.isInteger(userId) || userId <= 0
+      !Number.isInteger(projectId) ||
+      projectId <= 0 ||
+      !Number.isInteger(userId) ||
+      userId <= 0
     ) {
       return res.status(400).json({
         success: false,
@@ -33,7 +38,7 @@ export const addProjectMember = async (req, res, next) => {
       });
     }
 
-    // Only owner or admin can add members
+    // Only project owner or admin can add members
     if (
       req.user.role !== "ADMIN" &&
       project.ownerId !== req.user.id
@@ -109,12 +114,16 @@ export const addProjectMember = async (req, res, next) => {
 };
 
 
+// ============================================
+// GET ALL REGISTERED TEAM MEMBERS
+// ============================================
 export const getAllMembers = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    // Admin can see all users
-    if (req.user.role === "ADMIN") {
+    // Admins and Project Managers can see all registered users
+    if (
+      req.user.role === "ADMIN" ||
+      req.user.role === "PROJECT_MANAGER"
+    ) {
       const members = await prisma.user.findMany({
         select: {
           id: true,
@@ -135,14 +144,15 @@ export const getAllMembers = async (req, res) => {
       });
     }
 
-    // Find projects accessible to this user
+    // Other users see themselves and users
+    // connected through their accessible projects
     const projects = await prisma.project.findMany({
       where: {
         OR: [
-          { ownerId: userId },
+          { ownerId: req.user.id },
           {
             members: {
-              some: { id: userId }
+              some: { id: req.user.id }
             }
           }
         ]
@@ -150,20 +160,17 @@ export const getAllMembers = async (req, res) => {
       select: {
         ownerId: true,
         members: {
-          select: {
-            id: true
-          }
+          select: { id: true }
         }
       }
     });
 
-    // Collect project owners and members
-    const allowedUserIds = new Set([userId]);
+    const allowedUserIds = new Set([req.user.id]);
 
-    projects.forEach((project) => {
+    projects.forEach(project => {
       allowedUserIds.add(project.ownerId);
 
-      project.members.forEach((member) => {
+      project.members.forEach(member => {
         allowedUserIds.add(member.id);
       });
     });
@@ -202,15 +209,20 @@ export const getAllMembers = async (req, res) => {
   }
 };
 
-// Remove a member from a project
+
+// ============================================
+// REMOVE A MEMBER FROM A PROJECT
+// ============================================
 export const removeProjectMember = async (req, res, next) => {
   try {
     const projectId = Number(req.params.projectId);
     const userId = Number(req.params.userId);
 
     if (
-      !Number.isInteger(projectId) || projectId <= 0 ||
-      !Number.isInteger(userId) || userId <= 0
+      !Number.isInteger(projectId) ||
+      projectId <= 0 ||
+      !Number.isInteger(userId) ||
+      userId <= 0
     ) {
       return res.status(400).json({
         success: false,
@@ -222,7 +234,10 @@ export const removeProjectMember = async (req, res, next) => {
       where: { id: projectId },
       include: {
         members: {
-          select: { id: true, name: true }
+          select: {
+            id: true,
+            name: true
+          }
         }
       }
     });
@@ -245,7 +260,7 @@ export const removeProjectMember = async (req, res, next) => {
       });
     }
 
-    // Project owner cannot be removed as a member
+    // Project owner cannot be removed
     if (project.ownerId === userId) {
       return res.status(400).json({
         success: false,
@@ -254,7 +269,7 @@ export const removeProjectMember = async (req, res, next) => {
     }
 
     const member = project.members.find(
-      (item) => item.id === userId
+      item => item.id === userId
     );
 
     if (!member) {
@@ -292,7 +307,7 @@ export const removeProjectMember = async (req, res, next) => {
       projectId: project.id,
       recipientUserIds: [
         project.ownerId,
-        ...project.members.map((item) => item.id),
+        ...project.members.map(item => item.id),
         userId
       ],
       io: req.app.get("io")
